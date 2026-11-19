@@ -6,13 +6,18 @@ The script is plain POSIX `sh` and has no distro-specific package commands. It h
 
 ## Usage
 
-Run it as your normal user from a terminal inside your Xfce session. It asks for `sudo` or `doas` when it needs root rights.
+Run it as your normal user. It asks for `sudo` or `doas` when it needs root rights.
 
 ```bash
 sh install-chicago95.sh
 ```
 
-Log out and back in afterwards so every running application picks up the theme.
+You can run it in two places:
+
+- **From a terminal inside your Xfce session:** the theme switches right away. Log out and back in afterwards so every running application picks it up.
+- **From a TTY or over SSH while you're logged out of Xfce:** the script writes your settings directly, and they take effect at your next Xfce login.
+
+If you're logged into Xfce and run the script from outside that session, it refuses. The running session would otherwise overwrite the new settings.
 
 ## Requirements
 
@@ -41,13 +46,18 @@ It also stops without changes in two more cases:
 | GTK3 override | Adds the override for your Xfce version to `~/.config/gtk-3.0/gtk.css` |
 | Flatpak | Adds a per-user override that exposes the theme and GTK4 stylesheet and sets `GTK_THEME` |
 | Overlay scrollbars | Turns overlay scrolling off through Xfce's `Gtk/OverlayScrolling` setting |
-| Desktop shadows, background color | Turns off xfwm4 shadows and sets a solid `#008080` desktop on every connected monitor |
+| Desktop shadows, background color | Turns off xfwm4 shadows and sets a solid `#008080` desktop on every monitor connected at login |
 | Cursors | Selects `Chicago95_Standard_Cursors` |
 | Terminal theme | Applies the Chicago95 colors and the `Less Perfect DOS VGA 12` font without bold text |
 | Sound theme | Selects the Chicago95 sound theme and turns on event and input feedback sounds |
 | LightDM GTK greeter (not in INSTALL.md) | Adds `/etc/lightdm/lightdm-gtk-greeter.conf.d/99-chicago95.conf` with the Chicago95 theme, icons, cursor and teal background |
 
-New accounts get the same settings through `/etc/skel`. The GTK4 import line needs the absolute path of the user's home directory, so a one-time autostart entry writes it on the user's first login and then removes itself.
+New accounts get the same settings through `/etc/skel`. Two steps need the running session, so a one-time autostart entry does them on the user's first login and then removes itself:
+
+- The GTK4 import line, which needs the absolute path of the user's home directory
+- The desktop background, which is stored per monitor and needs the monitor names from `xrandr`
+
+The same entry handles your own account when you run the script from a TTY.
 
 ## What gets skipped
 
@@ -91,6 +101,6 @@ To remove the theme system-wide, delete these paths:
 - `/usr/share/sounds/Chicago95`
 - `/usr/share/fonts/chicago95`
 - `/usr/share/xfce4/terminal/colorschemes/Chicago95.theme`
-- `/usr/local/libexec/chicago95-gtk4-setup`
+- `/usr/local/libexec/chicago95-first-login`
 - `/etc/lightdm/lightdm-gtk-greeter.conf.d/99-chicago95.conf`
 - the Chicago95 files the script added to `/etc/skel`

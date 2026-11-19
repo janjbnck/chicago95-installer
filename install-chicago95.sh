@@ -5,9 +5,8 @@ CHICAGO95_COMMIT=5da19b8b1e2a886ebf6628403023d5fac3acc3ee
 CHICAGO95_ARCHIVE="https://github.com/grassmunk/Chicago95/archive/$CHICAGO95_COMMIT.tar.gz"
 CURSOR_THEME=Chicago95_Standard_Cursors
 TERMINAL_FONT="Less Perfect DOS VGA 12"
-DESKTOP_COLOR="0 0.501961 0.501961 1"
-GTK4_HELPER=/usr/local/libexec/chicago95-gtk4-setup
-GTK4_AUTOSTART=.config/autostart/chicago95-gtk4-setup.desktop
+FIRST_LOGIN_HELPER=/usr/local/libexec/chicago95-first-login
+FIRST_LOGIN_AUTOSTART=.config/autostart/chicago95-first-login.desktop
 START_ICON=/usr/share/icons/Chicago95-tux/places/16/start-here.png
 GREETER=/usr/share/xgreeters/lightdm-gtk-greeter.desktop
 GREETER_MAIN_CONFIG=/etc/lightdm/lightdm-gtk-greeter.conf
@@ -57,14 +56,21 @@ check_components() {
   }
 }
 
-session_bus_available() {
-  [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || [ -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus" ]
+find_session_bus() {
+  [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] || return 0
+  socket=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus
+  [ -S "$socket" ] || return 1
+  DBUS_SESSION_BUS_ADDRESS=unix:path=$socket
+  export DBUS_SESSION_BUS_ADDRESS
 }
 
-check_session() {
-  if [ -z "${DISPLAY:-}" ] || ! session_bus_available || ! pgrep -u "$(id -u)" -x xfce4-session >/dev/null 2>&1 ||
-    ! xfconf-query -c xfwm4 -l >/dev/null 2>&1 || ! xrandr --query >/dev/null 2>&1; then
-    die "Run this script from a terminal inside your Xfce session. Nothing was changed."
+detect_mode() {
+  if ! pgrep -u "$(id -u)" -x xfce4-session >/dev/null 2>&1; then
+    in_session=false
+  elif [ -n "${DISPLAY:-}" ] && find_session_bus && xfconf-query -c xfwm4 -l >/dev/null 2>&1; then
+    in_session=true
+  else
+    die "You are logged into Xfce. Run the script from a terminal inside that session, or log out of Xfce and run it from a TTY. Nothing was changed."
   fi
 }
 
@@ -91,7 +97,7 @@ system_targets() {
   say /usr/share/sounds/Chicago95
   say /usr/share/fonts/chicago95
   say /usr/share/xfce4/terminal/colorschemes/Chicago95.theme
-  say "$GTK4_HELPER"
+  say "$FIRST_LOGIN_HELPER"
   say "$GREETER_CONFIG"
 }
 
@@ -99,7 +105,7 @@ skel_targets() {
   for channel in $CHANNELS; do say "/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/$channel.xml"; done
   say /etc/skel/.config/xfce4/terminal/terminalrc
   say /etc/skel/.config/gtk-3.0/gtk.css
-  say "/etc/skel/$GTK4_AUTOSTART"
+  say "/etc/skel/$FIRST_LOGIN_AUTOSTART"
   say /etc/skel/.local/share/themes/Chicago95
   say /etc/skel/.local/share/flatpak/overrides/global
 }
@@ -118,22 +124,11 @@ download() {
   if has curl; then curl -fsSL "$1"; else wget -qO- "$1"; fi
 }
 
-terminal_uses_xfconf() {
-  xfce4-terminal --version 2>/dev/null | awk 'NR == 1 { split($2, v, "."); ok = v[1] > 1 || (v[1] == 1 && v[2] >= 1) } END { exit !ok }'
-}
-
 gtk3_override() {
-  case "$(xfce4-panel --version 2>/dev/null)" in
-    *"Xfce 4.12"*) say "$src/Extras/override/gtk-3.22/gtk.css" ;;
+  case "$(xfconf-query --version 2>/dev/null)" in
+    *" 4.12."*) say "$src/Extras/override/gtk-3.22/gtk.css" ;;
     *) say "$src/Extras/override/gtk-3.24/gtk.css" ;;
   esac
-}
-
-connected_monitors() {
-  {
-    xrandr --query | awk '$2 == "connected" { print $1 }'
-    xfconf-query -c xfce4-desktop -l 2>/dev/null | sed -n 's#^/backdrop/screen0/monitor\([^/]*\)/workspace[0-9]*/.*#\1#p'
-  } | sort -u
 }
 
 settings() {
@@ -195,20 +190,27 @@ xfce4-panel /plugins/plugin-9/digital-layout uint 3
 xfce4-panel /plugins/plugin-9/digital-time-format string %I:%M %p
 xfce4-panel /plugins/plugin-9/digital-format string %I:%M %p
 EOF
-  for monitor in $monitors; do
-    cat <<EOF
-xfce4-desktop /backdrop/screen0/monitor$monitor/workspace0/color-style int 0
-xfce4-desktop /backdrop/screen0/monitor$monitor/workspace0/rgba1 double[] $DESKTOP_COLOR
-xfce4-desktop /backdrop/screen0/monitor$monitor/workspace0/image-style int 0
-EOF
+}
+
+terminal_settings() {
+  awk -v font="$TERMINAL_FONT" '
+    /^Color/ { key = substr($0, 1, index($0, "=") - 1); gsub(/[A-Z]/, "-&", key)
+               print "xfce4-terminal /" tolower(substr(key, 2)) " string " substr($0, index($0, "=") + 1) }
+    END { print "xfce4-terminal /font-name string " font; print "xfce4-terminal /font-allow-bold bool false" }
+  ' "$src/Extras/Chicago95.theme"
+}
+
+to_commands() {
+  while read -r channel property type value; do
+    case $type in
+      *'[]')
+        printf "xfconf-query -c %s -p '%s' -n -a" "$channel" "$property"
+        for item in $value; do printf " -t %s -s '%s'" "${type%??}" "$item"; done
+        printf '\n'
+        ;;
+      *) printf "xfconf-query -c %s -p '%s' -n -t %s -s '%s'\n" "$channel" "$property" "$type" "$value" ;;
+    esac
   done
-  if $terminal_xfconf; then
-    awk -v font="$TERMINAL_FONT" '
-      /^Color/ { key = substr($0, 1, index($0, "=") - 1); gsub(/[A-Z]/, "-&", key)
-                 print "xfce4-terminal /" tolower(substr(key, 2)) " string " substr($0, index($0, "=") + 1) }
-      END { print "xfce4-terminal /font-name string " font; print "xfce4-terminal /font-allow-bold bool false" }
-    ' "$src/Extras/Chicago95.theme"
-  fi
 }
 
 xfconf_script() {
@@ -221,16 +223,10 @@ case ":$modules:" in
   *) xfconf-query -c xsettings -p /Gtk/Modules -n -t string -s "${modules:+$modules:}canberra-gtk-module" ;;
 esac
 EOF
-  settings | while read -r channel property type value; do
-    case $type in
-      *'[]')
-        printf "xfconf-query -c %s -p '%s' -n -a" "$channel" "$property"
-        for item in $value; do printf " -t %s -s '%s'" "${type%??}" "$item"; done
-        printf '\n'
-        ;;
-      *) printf "xfconf-query -c %s -p '%s' -n -t %s -s '%s'\n" "$channel" "$property" "$type" "$value" ;;
-    esac
-  done
+  settings | to_commands
+  say "if xfconf-query -l | grep -qx '  xfce4-terminal'; then"
+  terminal_settings | to_commands
+  say 'fi'
 }
 
 write_block() {
@@ -273,12 +269,13 @@ configure_files() {
   mkdir -p "$2/themes"
   cp -R "$src/Theme/Chicago95" "$2/themes/"
   write_block "$1/gtk-3.0/gtk.css" GTK3 "$(cat "$(gtk3_override)")"
-  if ! $terminal_xfconf; then write_terminalrc "$1/xfce4/terminal/terminalrc"; fi
+  write_terminalrc "$1/xfce4/terminal/terminalrc"
 }
 
-write_gtk4_helper() {
+write_first_login_helper() {
   cat >"$1" <<'EOF'
 #!/bin/sh
+export LC_ALL=C
 config=${XDG_CONFIG_HOME:-$HOME/.config}
 if ! grep -q '>>> Chicago95 GTK4 BEGIN' "$config/gtk-4.0/gtk.css" 2>/dev/null; then
   mkdir -p "$config/gtk-4.0"
@@ -287,8 +284,31 @@ if ! grep -q '>>> Chicago95 GTK4 BEGIN' "$config/gtk-4.0/gtk.css" 2>/dev/null; t
     "${XDG_DATA_HOME:-$HOME/.local/share}" \
     '/* <<< Chicago95 GTK4 END */' >>"$config/gtk-4.0/gtk.css"
 fi
-rm -f "$config/autostart/chicago95-gtk4-setup.desktop"
+monitors=$(xrandr --query 2>/dev/null | awk '$2 == "connected" { print $1 }')
+[ -n "$monitors" ] || exit 1
+for monitor in $monitors; do
+  prefix=/backdrop/screen0/monitor$monitor/workspace0
+  xfconf-query -c xfce4-desktop -p "$prefix/color-style" -n -t int -s 0
+  xfconf-query -c xfce4-desktop -p "$prefix/image-style" -n -t int -s 0
+  xfconf-query -c xfce4-desktop -p "$prefix/rgba1" -n -a -t double -s 0 -t double -s 0.501961 -t double -s 0.501961 -t double -s 1
+done
+rm -f "$config/autostart/chicago95-first-login.desktop"
 EOF
+}
+
+write_first_login_autostart() {
+  mkdir -p "${1%/*}"
+  printf '[Desktop Entry]\nType=Application\nName=Chicago95 first login setup\nExec=%s\nNoDisplay=true\n' "$FIRST_LOGIN_HELPER" >"$1"
+}
+
+run_private_xfconf() {
+  running_xfconfd=" $(xfconfd_pids | tr '\n' ' ') "
+  XDG_CONFIG_HOME="$1" LC_ALL=C dbus-run-session -- sh "$tmp/xfconf.sh" 2>"$tmp/xfconf.log" || return 1
+  for pid in $(xfconfd_pids); do
+    case $running_xfconfd in *" $pid "*) continue ;; esac
+    tries=0
+    while kill -0 "$pid" 2>/dev/null && [ "$tries" -lt 30 ]; do sleep 1; tries=$((tries + 1)); done
+  done
 }
 
 write_greeter_config() {
@@ -303,20 +323,13 @@ stage_skel() {
     fi
   done
   configure_files "$stage/.config" "$stage/.local/share"
-  mkdir -p "$(dirname "$stage/$GTK4_AUTOSTART")"
-  printf '[Desktop Entry]\nType=Application\nName=Chicago95 GTK4 setup\nExec=%s\nNoDisplay=true\n' "$GTK4_HELPER" >"$stage/$GTK4_AUTOSTART"
+  write_first_login_autostart "$stage/$FIRST_LOGIN_AUTOSTART"
   flatpak_override "$stage/.local/share"
   rm -rf "$stage/.local/share/flatpak/repo" "$stage/.local/share/flatpak/.changed"
-  running_xfconfd=" $(xfconfd_pids | tr '\n' ' ') "
-  XDG_CONFIG_HOME="$stage/.config" LC_ALL=C dbus-run-session -- sh "$tmp/xfconf.sh" 2>"$tmp/xfconf.log" ||
+  run_private_xfconf "$stage/.config" ||
     die "Could not prepare the settings for new users: $(cat "$tmp/xfconf.log") Nothing was changed."
-  for pid in $(xfconfd_pids); do
-    case $running_xfconfd in *" $pid "*) continue ;; esac
-    tries=0
-    while kill -0 "$pid" 2>/dev/null && [ "$tries" -lt 30 ]; do sleep 1; tries=$((tries + 1)); done
-  done
   for channel in $CHANNELS; do
-    [ "$channel" = xfce4-terminal ] && ! $terminal_xfconf && continue
+    [ "$channel" = xfce4-terminal ] && continue
     [ -f "$stage/.config/xfce4/xfconf/xfce-perchannel-xml/$channel.xml" ] || die "Could not prepare the $channel settings for new users. Nothing was changed."
   done
   chmod -R u=rwX,go=rX "$stage"
@@ -341,7 +354,7 @@ install_system() {
     rm -rf /etc/skel/.local/share/themes/Chicago95
     cp -R "$stage/." /etc/skel/
     fc-cache -f
-  ' sh "$src" "$stage" "$tmp/gtk4-helper" "$GTK4_HELPER" "$tmp/greeter.conf" "$GREETER_CONFIG"
+  ' sh "$src" "$stage" "$tmp/first-login" "$FIRST_LOGIN_HELPER" "$tmp/greeter.conf" "$GREETER_CONFIG"
 }
 
 panel_running() { pgrep -u "$(id -u)" -x xfce4-panel >/dev/null 2>&1; }
@@ -365,13 +378,22 @@ configure_current_user() {
     while panel_running && [ "$tries" -lt 20 ]; do sleep 1; tries=$((tries + 1)); done
   fi
   rm -rf "$config/xfce4/panel"
-  LC_ALL=C sh "$tmp/xfconf.sh"
+  if find_session_bus; then
+    LC_ALL=C sh "$tmp/xfconf.sh"
+  else
+    run_private_xfconf "$config" || die "Could not write your Xfce settings: $(cat "$tmp/xfconf.log")"
+  fi
   if $restart_panel; then (nohup xfce4-panel >/dev/null 2>&1 &); fi
+  if $in_session; then
+    "$FIRST_LOGIN_HELPER"
+  else
+    write_first_login_autostart "$config/autostart/chicago95-first-login.desktop"
+  fi
 }
 
 [ "$(id -u)" -ne 0 ] || die "Run this script as the user who should get the theme, not as root. It asks for root rights when it needs them."
 check_components
-check_session
+detect_mode
 check_greeter_config
 if has sudo; then ROOT=sudo; else ROOT=doas; fi
 
@@ -389,11 +411,8 @@ src=$tmp/Chicago95-$CHICAGO95_COMMIT
 say "Checking that no installed package owns the target paths..."
 check_conflicts
 
-terminal_xfconf=false
-if terminal_uses_xfconf; then terminal_xfconf=true; fi
-monitors=$(connected_monitors)
 xfconf_script >"$tmp/xfconf.sh"
-write_gtk4_helper "$tmp/gtk4-helper"
+write_first_login_helper "$tmp/first-login"
 write_greeter_config "$tmp/greeter.conf"
 
 say "Preparing the defaults for new users..."
@@ -405,4 +424,8 @@ install_system
 say "Applying the theme to $(id -un)..."
 configure_current_user
 
-say "Chicago95 is installed and active. Log out and back in so every running application picks it up."
+if $in_session; then
+  say "Chicago95 is installed and active. Log out and back in so every running application picks it up."
+else
+  say "Chicago95 is installed. It takes effect the next time you log into Xfce."
+fi
