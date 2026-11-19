@@ -3,6 +3,7 @@ set -eu
 
 CHICAGO95_COMMIT=5da19b8b1e2a886ebf6628403023d5fac3acc3ee
 CHICAGO95_ARCHIVE="https://github.com/grassmunk/Chicago95/archive/$CHICAGO95_COMMIT.tar.gz"
+ICON_THEME=Chicago95-tux
 CURSOR_THEME=Chicago95_Standard_Cursors
 UI_FONT="Helvetica 8"
 TITLE_FONT="Helvetica Bold 8"
@@ -11,7 +12,6 @@ FONTCONFIG_CONFIG=/etc/fonts/conf.d/70-chicago95-helvetica.conf
 WALLPAPER=/usr/share/backgrounds/chicago95/Setup.png
 FIRST_LOGIN_HELPER=/usr/local/libexec/chicago95-first-login
 FIRST_LOGIN_AUTOSTART=.config/autostart/chicago95-first-login.desktop
-START_ICON=/usr/share/icons/Chicago95-tux/places/16/start-here.png
 GREETER=/usr/share/xgreeters/lightdm-gtk-greeter.desktop
 GREETER_MAIN_CONFIG=/etc/lightdm/lightdm-gtk-greeter.conf
 GREETER_CONFIG=/etc/lightdm/lightdm-gtk-greeter.conf.d/99-chicago95.conf
@@ -147,7 +147,7 @@ gtk3_override() {
 settings() {
   cat <<EOF
 xsettings /Net/ThemeName string Chicago95
-xsettings /Net/IconThemeName string Chicago95
+xsettings /Net/IconThemeName string $ICON_THEME
 xsettings /Gtk/CursorThemeName string $CURSOR_THEME
 xsettings /Gtk/FontName string $UI_FONT
 xsettings /Net/SoundThemeName string Chicago95
@@ -176,7 +176,7 @@ xfce4-panel /panels/panel-1/background-style uint 0
 xfce4-panel /panels/panel-1/icon-size uint 16
 xfce4-panel /panels/panel-1/plugin-ids int[] 1 2 3 4 5 6 7 8 9
 xfce4-panel /plugins/plugin-1 string whiskermenu
-xfce4-panel /plugins/plugin-1/button-icon string $START_ICON
+xfce4-panel /plugins/plugin-1/button-icon string start-here
 xfce4-panel /plugins/plugin-1/button-title string Start
 xfce4-panel /plugins/plugin-1/show-button-icon bool true
 xfce4-panel /plugins/plugin-1/show-button-title bool true
@@ -326,7 +326,7 @@ run_private_xfconf() {
 }
 
 write_greeter_config() {
-  printf '[greeter]\ntheme-name=Chicago95\nicon-theme-name=Chicago95\ncursor-theme-name=%s\nfont-name=%s\nbackground=#008080\n' "$CURSOR_THEME" "$UI_FONT" >"$1"
+  printf '[greeter]\ntheme-name=Chicago95\nicon-theme-name=%s\ncursor-theme-name=%s\nfont-name=%s\nbackground=#008080\n' "$ICON_THEME" "$CURSOR_THEME" "$UI_FONT" >"$1"
 }
 
 write_fontconfig_config() {
