@@ -4,7 +4,11 @@ set -eu
 CHICAGO95_COMMIT=5da19b8b1e2a886ebf6628403023d5fac3acc3ee
 CHICAGO95_ARCHIVE="https://github.com/grassmunk/Chicago95/archive/$CHICAGO95_COMMIT.tar.gz"
 CURSOR_THEME=Chicago95_Standard_Cursors
+UI_FONT="Helvetica 8"
+TITLE_FONT="Helvetica Bold 8"
 TERMINAL_FONT="Less Perfect DOS VGA 12"
+FONTCONFIG_CONFIG=/etc/fonts/conf.d/70-chicago95-helvetica.conf
+WALLPAPER=/usr/share/backgrounds/chicago95/Setup.png
 FIRST_LOGIN_HELPER=/usr/local/libexec/chicago95-first-login
 FIRST_LOGIN_AUTOSTART=.config/autostart/chicago95-first-login.desktop
 START_ICON=/usr/share/icons/Chicago95-tux/places/16/start-here.png
@@ -17,11 +21,14 @@ say() { printf '%s\n' "$*"; }
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 has() { command -v "$1" >/dev/null 2>&1; }
 has_lib() { find /usr/lib /usr/lib64 /usr/lib32 /lib /lib64 /usr/local/lib -maxdepth 4 -name "$1" 2>/dev/null | grep -q .; }
+libreoffice_dir() { soffice=$(readlink -f "$(command -v soffice)" 2>/dev/null) || soffice=""; say "${soffice%/program/soffice}"; }
 
 missing=""
 need_command() { has "$2" || missing="$missing  - $1 (command $2)
 "; }
 need_lib() { has_lib "$2" || missing="$missing  - $1 (library $2)
+"; }
+need_file() { [ -e "$2" ] || missing="$missing  - $1 (file $2)
 "; }
 
 check_components() {
@@ -36,9 +43,10 @@ check_components() {
   need_command "Thunar" thunar
   need_command "Xfce Terminal" xfce4-terminal
   need_command "Flatpak" flatpak
-  [ -f "$GREETER" ] || missing="$missing  - LightDM GTK greeter (file $GREETER)
-"
-  need_lib "GTK 4" libgtk-4.so.1
+  need_file "LightDM GTK greeter" "$GREETER"
+  need_command "LibreOffice" soffice
+  has soffice && need_file "LibreOffice installation folder" "$libreoffice/share/config"
+  need_lib "LibreOffice GTK 3 integration" libvclplug_gtk3lo.so
   need_lib "libcanberra GTK 3 module for event sounds" libcanberra-gtk3-module.so
   need_command "Fontconfig" fc-cache
   need_command "D-Bus" dbus-run-session
@@ -46,6 +54,7 @@ check_components() {
   need_command "pgrep" pgrep
   need_command "tar" tar
   need_command "gzip" gzip
+  need_command "zip" zip
   has curl || has wget || missing="$missing  - curl or wget
 "
   has sudo || has doas || missing="$missing  - sudo or doas
@@ -75,7 +84,7 @@ detect_mode() {
 }
 
 check_greeter_config() {
-  overrides=$(grep -E '^[[:space:]]*(theme-name|icon-theme-name|cursor-theme-name|background)[[:space:]]*=' "$GREETER_MAIN_CONFIG" 2>/dev/null || true)
+  overrides=$(grep -E '^[[:space:]]*(theme-name|icon-theme-name|cursor-theme-name|font-name|background)[[:space:]]*=' "$GREETER_MAIN_CONFIG" 2>/dev/null || true)
   [ -z "$overrides" ] || {
     printf '%s sets these keys. LightDM GTK greeter reads that file after every drop-in, so Chicago95 cannot override them without editing a file owned by the package. Comment them out and run the script again. Nothing was changed.\n%s\n' "$GREETER_MAIN_CONFIG" "$overrides" >&2
     exit 1
@@ -96,7 +105,11 @@ system_targets() {
   for dir in "$src"/Icons/* "$src"/Cursors/*; do say "/usr/share/icons/${dir##*/}"; done
   say /usr/share/sounds/Chicago95
   say /usr/share/fonts/chicago95
+  say "$FONTCONFIG_CONFIG"
+  say "${WALLPAPER%/*}"
   say /usr/share/xfce4/terminal/colorschemes/Chicago95.theme
+  say "$libreoffice/share/config/images_chicago95.zip"
+  say "$libreoffice/share/registry/chicago95.xcd"
   say "$FIRST_LOGIN_HELPER"
   say "$GREETER_CONFIG"
 }
@@ -136,12 +149,13 @@ settings() {
 xsettings /Net/ThemeName string Chicago95
 xsettings /Net/IconThemeName string Chicago95
 xsettings /Gtk/CursorThemeName string $CURSOR_THEME
+xsettings /Gtk/FontName string $UI_FONT
 xsettings /Net/SoundThemeName string Chicago95
 xsettings /Net/EnableEventSounds bool true
 xsettings /Net/EnableInputFeedbackSounds bool true
 xsettings /Gtk/OverlayScrolling bool false
 xfwm4 /general/theme string Chicago95
-xfwm4 /general/title_font string Sans Bold 8
+xfwm4 /general/title_font string $TITLE_FONT
 xfwm4 /general/show_dock_shadow bool false
 xfwm4 /general/show_frame_shadow bool false
 xfwm4 /general/show_popup_shadow bool false
@@ -256,7 +270,14 @@ write_terminalrc() {
 }
 
 flatpak_override() {
-  XDG_DATA_HOME=$1 flatpak override --user --filesystem=xdg-data/themes:ro --filesystem=xdg-config/gtk-4.0:ro --env=GTK_THEME=Chicago95
+  XDG_DATA_HOME=$1 flatpak override --user --filesystem=xdg-data/themes:ro --unset-env=GTK_THEME
+}
+
+remove_gtk4_block() {
+  grep -q '>>> Chicago95 GTK4 BEGIN' "$1" 2>/dev/null || return 0
+  sed '/>>> Chicago95 GTK4 BEGIN/,/<<< Chicago95 GTK4 END/d' "$1" >"$1.chicago95-new"
+  cat "$1.chicago95-new" >"$1"
+  rm -f "$1.chicago95-new"
 }
 
 backup_once() {
@@ -273,26 +294,24 @@ configure_files() {
 }
 
 write_first_login_helper() {
-  cat >"$1" <<'EOF'
-#!/bin/sh
+  printf '#!/bin/sh\nwallpaper=%s\n' "$WALLPAPER" >"$1"
+  cat >>"$1" <<'EOF'
 export LC_ALL=C
-config=${XDG_CONFIG_HOME:-$HOME/.config}
-if ! grep -q '>>> Chicago95 GTK4 BEGIN' "$config/gtk-4.0/gtk.css" 2>/dev/null; then
-  mkdir -p "$config/gtk-4.0"
-  printf '%s\n@import url("file://%s/themes/Chicago95/gtk-4.0/gtk.css");\n%s\n' \
-    '/* >>> Chicago95 GTK4 BEGIN - managed by the Chicago95 installer, do not edit */' \
-    "${XDG_DATA_HOME:-$HOME/.local/share}" \
-    '/* <<< Chicago95 GTK4 END */' >>"$config/gtk-4.0/gtk.css"
-fi
 monitors=$(xrandr --query 2>/dev/null | awk '$2 == "connected" { print $1 }')
 [ -n "$monitors" ] || exit 1
+tries=0
 for monitor in $monitors; do
   prefix=/backdrop/screen0/monitor$monitor/workspace0
+  until xfconf-query -c xfce4-desktop -p "$prefix/last-image" >/dev/null 2>&1 || [ "$tries" -ge 10 ]; do
+    sleep 1
+    tries=$((tries + 1))
+  done
   xfconf-query -c xfce4-desktop -p "$prefix/color-style" -n -t int -s 0
-  xfconf-query -c xfce4-desktop -p "$prefix/image-style" -n -t int -s 0
   xfconf-query -c xfce4-desktop -p "$prefix/rgba1" -n -a -t double -s 0 -t double -s 0.501961 -t double -s 0.501961 -t double -s 1
+  xfconf-query -c xfce4-desktop -p "$prefix/image-style" -n -t int -s 5
+  xfconf-query -c xfce4-desktop -p "$prefix/last-image" -n -t string -s "$wallpaper"
 done
-rm -f "$config/autostart/chicago95-first-login.desktop"
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/chicago95-first-login.desktop"
 EOF
 }
 
@@ -312,7 +331,38 @@ run_private_xfconf() {
 }
 
 write_greeter_config() {
-  printf '[greeter]\ntheme-name=Chicago95\nicon-theme-name=Chicago95\ncursor-theme-name=%s\nbackground=#008080\n' "$CURSOR_THEME" >"$1"
+  printf '[greeter]\ntheme-name=Chicago95\nicon-theme-name=Chicago95\ncursor-theme-name=%s\nfont-name=%s\nbackground=#008080\n' "$CURSOR_THEME" "$UI_FONT" >"$1"
+}
+
+write_fontconfig_config() {
+  cat >"$1" <<'EOF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <selectfont>
+    <acceptfont>
+      <pattern>
+        <patelt name="family"><string>Helvetica</string></patelt>
+        <patelt name="foundry"><string>Cron</string></patelt>
+      </pattern>
+    </acceptfont>
+  </selectfont>
+</fontconfig>
+EOF
+}
+
+write_libreoffice_config() {
+  cat >"$1" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<oor:data xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:oor="http://openoffice.org/2001/registry">
+<dependency file="main"/>
+<oor:component-data oor:package="org.openoffice.Office" oor:name="Common"><node oor:name="Misc"><prop oor:name="SymbolStyle"><value>chicago95</value></prop></node></oor:component-data>
+</oor:data>
+EOF
+}
+
+build_libreoffice_icons() {
+  (cd "$src/Extras/libreoffice-chicago95-iconset/Chicago95-theme/iconsets/c95" && zip -qr "$1" .)
 }
 
 stage_skel() {
@@ -338,23 +388,29 @@ stage_skel() {
 install_system() {
   $ROOT sh -euc '
     umask 022
-    src=$1 stage=$2 helper=$3 helper_target=$4 greeter=$5 greeter_target=$6
+    src=$1 stage=$2 tmp=$3 helper=$4 greeter=$5 fontconfig=$6 wallpaper=$7 libreoffice=$8
     install_dir() { rm -rf "$2/${1##*/}"; mkdir -p "$2"; cp -R "$1" "$2/"; chmod -R u=rwX,go=rX "$2/${1##*/}"; }
+    install_file() { mkdir -p "${2%/*}"; cp "$1" "$2"; chmod 644 "$2"; }
     install_dir "$src/Theme/Chicago95" /usr/share/themes
     for dir in "$src"/Icons/* "$src"/Cursors/*; do install_dir "$dir" /usr/share/icons; done
     install_dir "$src/sounds/Chicago95" /usr/share/sounds
     rm -rf /usr/share/fonts/chicago95
-    mkdir -p /usr/share/fonts/chicago95 /usr/share/xfce4/terminal/colorschemes "${helper_target%/*}" "${greeter_target%/*}"
-    cp "$src"/Fonts/vga_font/*.ttf /usr/share/fonts/chicago95/
-    cp "$src/Extras/Chicago95.theme" /usr/share/xfce4/terminal/colorschemes/
-    cp "$greeter" "$greeter_target"
-    chmod 644 /usr/share/fonts/chicago95/* /usr/share/xfce4/terminal/colorschemes/Chicago95.theme "$greeter_target"
-    cp "$helper" "$helper_target"
-    chmod 755 "$helper_target"
+    for font in "$src"/Fonts/vga_font/*.ttf "$src"/Fonts/bitmap/cronyx-cyrillic/crox[1-6]h*.otb; do
+      install_file "$font" "/usr/share/fonts/chicago95/${font##*/}"
+    done
+    install_file "$tmp/fontconfig.conf" "$fontconfig"
+    rm -rf "${wallpaper%/*}"
+    install_file "$src/Extras/Backgrounds/Wallpaper/${wallpaper##*/}" "$wallpaper"
+    install_file "$src/Extras/Chicago95.theme" /usr/share/xfce4/terminal/colorschemes/Chicago95.theme
+    install_file "$tmp/images_chicago95.zip" "$libreoffice/share/config/images_chicago95.zip"
+    install_file "$tmp/chicago95.xcd" "$libreoffice/share/registry/chicago95.xcd"
+    install_file "$tmp/greeter.conf" "$greeter"
+    install_file "$tmp/first-login" "$helper"
+    chmod 755 "$helper"
     rm -rf /etc/skel/.local/share/themes/Chicago95
     cp -R "$stage/." /etc/skel/
     fc-cache -f
-  ' sh "$src" "$stage" "$tmp/first-login" "$FIRST_LOGIN_HELPER" "$tmp/greeter.conf" "$GREETER_CONFIG"
+  ' sh "$src" "$stage" "$tmp" "$FIRST_LOGIN_HELPER" "$GREETER_CONFIG" "$FONTCONFIG_CONFIG" "$WALLPAPER" "$libreoffice"
 }
 
 panel_running() { pgrep -u "$(id -u)" -x xfce4-panel >/dev/null 2>&1; }
@@ -363,12 +419,12 @@ xfconfd_pids() { pgrep -u "$(id -u)" -x xfconfd || true; }
 configure_current_user() {
   config=${XDG_CONFIG_HOME:-$HOME/.config}
   data=${XDG_DATA_HOME:-$HOME/.local/share}
-  for file in "$config/gtk-3.0/gtk.css" "$config/gtk-4.0/gtk.css" "$config/xfce4/terminal/terminalrc" \
+  for file in "$config/gtk-3.0/gtk.css" "$config/xfce4/terminal/terminalrc" \
     "$config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml" "$config/xfce4/panel"; do
     backup_once "$file"
   done
   configure_files "$config" "$data"
-  write_block "$config/gtk-4.0/gtk.css" GTK4 "@import url(\"file://$data/themes/Chicago95/gtk-4.0/gtk.css\");"
+  remove_gtk4_block "$config/gtk-4.0/gtk.css"
   flatpak_override "$data"
   restart_panel=false
   if panel_running; then
@@ -392,6 +448,7 @@ configure_current_user() {
 }
 
 [ "$(id -u)" -ne 0 ] || die "Run this script as the user who should get the theme, not as root. It asks for root rights when it needs them."
+libreoffice=$(libreoffice_dir)
 check_components
 detect_mode
 check_greeter_config
@@ -414,6 +471,9 @@ check_conflicts
 xfconf_script >"$tmp/xfconf.sh"
 write_first_login_helper "$tmp/first-login"
 write_greeter_config "$tmp/greeter.conf"
+write_fontconfig_config "$tmp/fontconfig.conf"
+write_libreoffice_config "$tmp/chicago95.xcd"
+build_libreoffice_icons "$tmp/images_chicago95.zip" || die "Building the LibreOffice icon theme failed. Nothing was changed."
 
 say "Preparing the defaults for new users..."
 stage_skel
