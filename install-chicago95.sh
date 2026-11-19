@@ -17,11 +17,14 @@ say() { printf '%s\n' "$*"; }
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 has() { command -v "$1" >/dev/null 2>&1; }
 has_lib() { find /usr/lib /usr/lib64 /usr/lib32 /lib /lib64 /usr/local/lib -maxdepth 4 -name "$1" 2>/dev/null | grep -q .; }
+libreoffice_dir() { soffice=$(readlink -f "$(command -v soffice)" 2>/dev/null) || soffice=""; say "${soffice%/program/soffice}"; }
 
 missing=""
 need_command() { has "$2" || missing="$missing  - $1 (command $2)
 "; }
 need_lib() { has_lib "$2" || missing="$missing  - $1 (library $2)
+"; }
+need_file() { [ -e "$2" ] || missing="$missing  - $1 (file $2)
 "; }
 
 check_components() {
@@ -36,8 +39,10 @@ check_components() {
   need_command "Thunar" thunar
   need_command "Xfce Terminal" xfce4-terminal
   need_command "Flatpak" flatpak
-  [ -f "$GREETER" ] || missing="$missing  - LightDM GTK greeter (file $GREETER)
-"
+  need_file "LightDM GTK greeter" "$GREETER"
+  need_command "LibreOffice" soffice
+  has soffice && need_file "LibreOffice installation folder" "$libreoffice/share/config"
+  need_lib "LibreOffice GTK 3 integration" libvclplug_gtk3lo.so
   need_lib "libcanberra GTK 3 module for event sounds" libcanberra-gtk3-module.so
   need_command "Fontconfig" fc-cache
   need_command "D-Bus" dbus-run-session
@@ -45,6 +50,7 @@ check_components() {
   need_command "pgrep" pgrep
   need_command "tar" tar
   need_command "gzip" gzip
+  need_command "zip" zip
   has curl || has wget || missing="$missing  - curl or wget
 "
   has sudo || has doas || missing="$missing  - sudo or doas
@@ -96,6 +102,8 @@ system_targets() {
   say /usr/share/sounds/Chicago95
   say /usr/share/fonts/chicago95
   say /usr/share/xfce4/terminal/colorschemes/Chicago95.theme
+  say "$libreoffice/share/config/images_chicago95.zip"
+  say "$libreoffice/share/registry/chicago95.xcd"
   say "$FIRST_LOGIN_HELPER"
   say "$GREETER_CONFIG"
 }
@@ -313,6 +321,20 @@ write_greeter_config() {
   printf '[greeter]\ntheme-name=Chicago95\nicon-theme-name=Chicago95\ncursor-theme-name=%s\nbackground=#008080\n' "$CURSOR_THEME" >"$1"
 }
 
+write_libreoffice_config() {
+  cat >"$1" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<oor:data xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:oor="http://openoffice.org/2001/registry">
+<dependency file="main"/>
+<oor:component-data oor:package="org.openoffice.Office" oor:name="Common"><node oor:name="Misc"><prop oor:name="SymbolStyle"><value>chicago95</value></prop></node></oor:component-data>
+</oor:data>
+EOF
+}
+
+build_libreoffice_icons() {
+  (cd "$src/Extras/libreoffice-chicago95-iconset/Chicago95-theme/iconsets/c95" && zip -qr "$1" .)
+}
+
 stage_skel() {
   skel_targets | while read -r path; do
     if [ -f "$path" ]; then
@@ -336,7 +358,7 @@ stage_skel() {
 install_system() {
   $ROOT sh -euc '
     umask 022
-    src=$1 stage=$2 tmp=$3 helper=$4 greeter=$5
+    src=$1 stage=$2 tmp=$3 helper=$4 greeter=$5 libreoffice=$6
     install_dir() { rm -rf "$2/${1##*/}"; mkdir -p "$2"; cp -R "$1" "$2/"; chmod -R u=rwX,go=rX "$2/${1##*/}"; }
     install_file() { mkdir -p "${2%/*}"; cp "$1" "$2"; chmod 644 "$2"; }
     install_dir "$src/Theme/Chicago95" /usr/share/themes
@@ -347,13 +369,15 @@ install_system() {
       install_file "$font" "/usr/share/fonts/chicago95/${font##*/}"
     done
     install_file "$src/Extras/Chicago95.theme" /usr/share/xfce4/terminal/colorschemes/Chicago95.theme
+    install_file "$tmp/images_chicago95.zip" "$libreoffice/share/config/images_chicago95.zip"
+    install_file "$tmp/chicago95.xcd" "$libreoffice/share/registry/chicago95.xcd"
     install_file "$tmp/greeter.conf" "$greeter"
     install_file "$tmp/first-login" "$helper"
     chmod 755 "$helper"
     rm -rf /etc/skel/.local/share/themes/Chicago95
     cp -R "$stage/." /etc/skel/
     fc-cache -f
-  ' sh "$src" "$stage" "$tmp" "$FIRST_LOGIN_HELPER" "$GREETER_CONFIG"
+  ' sh "$src" "$stage" "$tmp" "$FIRST_LOGIN_HELPER" "$GREETER_CONFIG" "$libreoffice"
 }
 
 panel_running() { pgrep -u "$(id -u)" -x xfce4-panel >/dev/null 2>&1; }
@@ -391,6 +415,7 @@ configure_current_user() {
 }
 
 [ "$(id -u)" -ne 0 ] || die "Run this script as the user who should get the theme, not as root. It asks for root rights when it needs them."
+libreoffice=$(libreoffice_dir)
 check_components
 detect_mode
 check_greeter_config
@@ -413,6 +438,8 @@ check_conflicts
 xfconf_script >"$tmp/xfconf.sh"
 write_first_login_helper "$tmp/first-login"
 write_greeter_config "$tmp/greeter.conf"
+write_libreoffice_config "$tmp/chicago95.xcd"
+build_libreoffice_icons "$tmp/images_chicago95.zip" || die "Building the LibreOffice icon theme failed. Nothing was changed."
 
 say "Preparing the defaults for new users..."
 stage_skel
