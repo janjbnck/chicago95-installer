@@ -41,9 +41,9 @@ It also stops without changes in two more cases:
 | System-wide install | Copies the GTK theme to `/usr/share/themes`, and the icon and cursor themes to `/usr/share/icons` |
 | LightDM font, Terminal fonts | Installs the DOS VGA fonts to `/usr/share/fonts/chicago95` and refreshes the font cache |
 | MS Sans Serif font | Installs the cronyx-cyrillic Helvetica bitmap font instead and sets it as `Helvetica 8` for the interface and `Helvetica Bold 8` for window titles |
-| Enabling the GTK, icon, window manager and notification themes | Sets the theme, the `Chicago95-tux` icons and 100% notification opacity |
+| Enabling the GTK, icon, window manager and notification themes | Sets the theme, icons and 100% notification opacity |
 | XFCE4 panelbar (horizontal) | Builds the taskbar from the manual steps: Whisker Menu, Show Desktop, window buttons, notification area and clock |
-| Start Buttons | Gives the Whisker Menu button the theme's `start-here` icon, which is Tux in `Chicago95-tux`, and a "Start" label |
+| Start Buttons | Gives the Whisker Menu button the Tux icon from the `Chicago95-tux` icon theme and a "Start" label |
 | GTK3 override | Adds the override for your Xfce version to `~/.config/gtk-3.0/gtk.css` |
 | Flatpak | Adds a per-user override that exposes the theme |
 | Overlay scrollbars | Turns overlay scrolling off through Xfce's `Gtk/OverlayScrolling` setting |
@@ -51,7 +51,7 @@ It also stops without changes in two more cases:
 | Cursors | Selects `Chicago95_Standard_Cursors` |
 | Terminal theme | Applies the Chicago95 colors and the `Less Perfect DOS VGA 12` font without bold text |
 | Sound theme | Selects the Chicago95 sound theme and turns on event and input feedback sounds |
-| LightDM GTK greeter (not in INSTALL.md) | Adds `/etc/lightdm/lightdm-gtk-greeter.conf.d/99-chicago95.conf` with the Chicago95 theme, `Chicago95-tux` icons, cursor, Helvetica font and teal background |
+| LightDM GTK greeter (not in INSTALL.md) | Adds `/etc/lightdm/lightdm-gtk-greeter.conf.d/99-chicago95.conf` with the Chicago95 theme, icons, cursor, Helvetica font and teal background |
 | LibreOffice (not in INSTALL.md) | Builds the icon theme from `Extras/libreoffice-chicago95-iconset` and makes it the default for every user. The GTK 3 integration gives LibreOffice the Chicago95 widgets |
 
 Only the Helvetica files from the cronyx-cyrillic folder are installed, so requests for Times, Courier or Fixed keep their usual fonts. Many distros hide bitmap fonts with a `70-no-bitmaps` fontconfig rule. `/etc/fonts/conf.d/70-chicago95-helvetica.conf` whitelists just this font, so other bitmap fonts stay hidden.
