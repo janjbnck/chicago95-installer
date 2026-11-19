@@ -15,7 +15,7 @@ START_ICON=/usr/share/icons/Chicago95-tux/places/16/start-here.png
 GREETER=/usr/share/xgreeters/lightdm-gtk-greeter.desktop
 GREETER_MAIN_CONFIG=/etc/lightdm/lightdm-gtk-greeter.conf
 GREETER_CONFIG=/etc/lightdm/lightdm-gtk-greeter.conf.d/99-chicago95.conf
-CHANNELS="xsettings xfwm4 xfce4-notifyd xfce4-desktop xfce4-panel xfce4-terminal"
+CHANNELS="xsettings xfwm4 xfce4-notifyd xfce4-desktop xfce4-panel thunar xfce4-terminal"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
@@ -203,6 +203,7 @@ xfce4-panel /plugins/plugin-9/mode uint 2
 xfce4-panel /plugins/plugin-9/digital-layout uint 3
 xfce4-panel /plugins/plugin-9/digital-time-format string %I:%M %p
 xfce4-panel /plugins/plugin-9/digital-format string %I:%M %p
+thunar /misc-highlighting-enabled bool false
 EOF
 }
 
