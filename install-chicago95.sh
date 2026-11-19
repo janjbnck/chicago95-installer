@@ -38,7 +38,6 @@ check_components() {
   need_command "Flatpak" flatpak
   [ -f "$GREETER" ] || missing="$missing  - LightDM GTK greeter (file $GREETER)
 "
-  need_lib "GTK 4" libgtk-4.so.1
   need_lib "libcanberra GTK 3 module for event sounds" libcanberra-gtk3-module.so
   need_command "Fontconfig" fc-cache
   need_command "D-Bus" dbus-run-session
@@ -256,7 +255,14 @@ write_terminalrc() {
 }
 
 flatpak_override() {
-  XDG_DATA_HOME=$1 flatpak override --user --filesystem=xdg-data/themes:ro --filesystem=xdg-config/gtk-4.0:ro --env=GTK_THEME=Chicago95
+  XDG_DATA_HOME=$1 flatpak override --user --filesystem=xdg-data/themes:ro --unset-env=GTK_THEME
+}
+
+remove_gtk4_block() {
+  grep -q '>>> Chicago95 GTK4 BEGIN' "$1" 2>/dev/null || return 0
+  sed '/>>> Chicago95 GTK4 BEGIN/,/<<< Chicago95 GTK4 END/d' "$1" >"$1.chicago95-new"
+  cat "$1.chicago95-new" >"$1"
+  rm -f "$1.chicago95-new"
 }
 
 backup_once() {
@@ -276,14 +282,6 @@ write_first_login_helper() {
   cat >"$1" <<'EOF'
 #!/bin/sh
 export LC_ALL=C
-config=${XDG_CONFIG_HOME:-$HOME/.config}
-if ! grep -q '>>> Chicago95 GTK4 BEGIN' "$config/gtk-4.0/gtk.css" 2>/dev/null; then
-  mkdir -p "$config/gtk-4.0"
-  printf '%s\n@import url("file://%s/themes/Chicago95/gtk-4.0/gtk.css");\n%s\n' \
-    '/* >>> Chicago95 GTK4 BEGIN - managed by the Chicago95 installer, do not edit */' \
-    "${XDG_DATA_HOME:-$HOME/.local/share}" \
-    '/* <<< Chicago95 GTK4 END */' >>"$config/gtk-4.0/gtk.css"
-fi
 monitors=$(xrandr --query 2>/dev/null | awk '$2 == "connected" { print $1 }')
 [ -n "$monitors" ] || exit 1
 for monitor in $monitors; do
@@ -292,7 +290,7 @@ for monitor in $monitors; do
   xfconf-query -c xfce4-desktop -p "$prefix/image-style" -n -t int -s 0
   xfconf-query -c xfce4-desktop -p "$prefix/rgba1" -n -a -t double -s 0 -t double -s 0.501961 -t double -s 0.501961 -t double -s 1
 done
-rm -f "$config/autostart/chicago95-first-login.desktop"
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/chicago95-first-login.desktop"
 EOF
 }
 
@@ -364,12 +362,12 @@ xfconfd_pids() { pgrep -u "$(id -u)" -x xfconfd || true; }
 configure_current_user() {
   config=${XDG_CONFIG_HOME:-$HOME/.config}
   data=${XDG_DATA_HOME:-$HOME/.local/share}
-  for file in "$config/gtk-3.0/gtk.css" "$config/gtk-4.0/gtk.css" "$config/xfce4/terminal/terminalrc" \
+  for file in "$config/gtk-3.0/gtk.css" "$config/xfce4/terminal/terminalrc" \
     "$config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml" "$config/xfce4/panel"; do
     backup_once "$file"
   done
   configure_files "$config" "$data"
-  write_block "$config/gtk-4.0/gtk.css" GTK4 "@import url(\"file://$data/themes/Chicago95/gtk-4.0/gtk.css\");"
+  remove_gtk4_block "$config/gtk-4.0/gtk.css"
   flatpak_override "$data"
   restart_panel=false
   if panel_running; then

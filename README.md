@@ -25,7 +25,7 @@ Before it changes anything, the script checks that the following are installed. 
 
 - Xfce: `xfce4-session`, `xfce4-settings`, `xfconf`, `xfwm4`, `xfce4-panel`, `xfdesktop`, `xfce4-notifyd` and the Whisker Menu plugin
 - Thunar, Xfce Terminal, Flatpak and the LightDM GTK greeter
-- GTK 4, the libcanberra GTK 3 module and Fontconfig
+- The libcanberra GTK 3 module and Fontconfig
 - `dbus-run-session`, `xrandr`, `pgrep`, `tar`, `gzip`, `curl` or `wget`, and `sudo` or `doas`
 
 It also stops without changes in two more cases:
@@ -40,11 +40,10 @@ It also stops without changes in two more cases:
 | System-wide install | Copies the GTK theme to `/usr/share/themes`, and the icon and cursor themes to `/usr/share/icons` |
 | LightDM font, Terminal fonts | Installs the DOS VGA fonts to `/usr/share/fonts/chicago95` and refreshes the font cache |
 | Enabling the GTK, icon, window manager and notification themes | Sets the theme, icons, `Sans Bold 8` title font and 100% notification opacity |
-| GNOME, GTK4 and libadwaita | Adds the `@import` block to `~/.config/gtk-4.0/gtk.css` |
 | XFCE4 panelbar (horizontal) | Builds the taskbar from the manual steps: Whisker Menu, Show Desktop, window buttons, notification area and clock |
 | Start Buttons | Gives the Whisker Menu button the Tux icon from the `Chicago95-tux` icon theme and a "Start" label |
 | GTK3 override | Adds the override for your Xfce version to `~/.config/gtk-3.0/gtk.css` |
-| Flatpak | Adds a per-user override that exposes the theme and GTK4 stylesheet and sets `GTK_THEME` |
+| Flatpak | Adds a per-user override that exposes the theme |
 | Overlay scrollbars | Turns overlay scrolling off through Xfce's `Gtk/OverlayScrolling` setting |
 | Desktop shadows, background color | Turns off xfwm4 shadows and sets a solid `#008080` desktop on every monitor connected at login |
 | Cursors | Selects `Chicago95_Standard_Cursors` |
@@ -52,16 +51,12 @@ It also stops without changes in two more cases:
 | Sound theme | Selects the Chicago95 sound theme and turns on event and input feedback sounds |
 | LightDM GTK greeter (not in INSTALL.md) | Adds `/etc/lightdm/lightdm-gtk-greeter.conf.d/99-chicago95.conf` with the Chicago95 theme, icons, cursor and teal background |
 
-New accounts get the same settings through `/etc/skel`. Two steps need the running session, so a one-time autostart entry does them on the user's first login and then removes itself:
-
-- The GTK4 import line, which needs the absolute path of the user's home directory
-- The desktop background, which is stored per monitor and needs the monitor names from `xrandr`
-
-The same entry handles your own account when you run the script from a TTY.
+New accounts get the same settings through `/etc/skel`. The desktop background is stored per monitor and needs the monitor names from `xrandr`, so a one-time autostart entry sets it on the user's first login and then removes itself. The same entry handles your own account when you run the script from a TTY.
 
 ## What gets skipped
 
 - **Microsoft branding:** Windows start button badges, Thunar status badge, DOS prompt and startup message for Bash and zsh, MS-DOS terminal title and cursor, Whisker Menu sidebar image and the Windows 95 startup sound
+- **libadwaita applications:** left in their own style on purpose. Plain GTK 4 applications still pick up Chicago95 through the theme name. Running the script again removes the GTK4 `@import` block and the Flatpak `GTK_THEME` override that earlier versions added
 - **Known problems in INSTALL.md:**
   - Qt5 and qt5ct: missing scrollbar borders with no fix
   - Helvetica and MS Sans Serif fonts: name conflict with Adobe Helvetica, and the Microsoft font isn't included
@@ -89,7 +84,7 @@ The same entry handles your own account when you run the script from a TTY.
 
 On the first run the script saves your existing files next to the originals:
 
-- `backup.gtk.css.chicago95` in `~/.config/gtk-3.0` and `~/.config/gtk-4.0`
+- `backup.gtk.css.chicago95` in `~/.config/gtk-3.0`
 - `backup.terminalrc.chicago95` in `~/.config/xfce4/terminal`
 - `backup.xfce4-panel.xml.chicago95` in `~/.config/xfce4/xfconf/xfce-perchannel-xml`
 - `backup.panel.chicago95` in `~/.config/xfce4`
