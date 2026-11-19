@@ -299,8 +299,13 @@ write_first_login_helper() {
 export LC_ALL=C
 monitors=$(xrandr --query 2>/dev/null | awk '$2 == "connected" { print $1 }')
 [ -n "$monitors" ] || exit 1
+tries=0
 for monitor in $monitors; do
   prefix=/backdrop/screen0/monitor$monitor/workspace0
+  until xfconf-query -c xfce4-desktop -p "$prefix/last-image" >/dev/null 2>&1 || [ "$tries" -ge 10 ]; do
+    sleep 1
+    tries=$((tries + 1))
+  done
   xfconf-query -c xfce4-desktop -p "$prefix/color-style" -n -t int -s 0
   xfconf-query -c xfce4-desktop -p "$prefix/rgba1" -n -a -t double -s 0 -t double -s 0.501961 -t double -s 0.501961 -t double -s 1
   xfconf-query -c xfce4-desktop -p "$prefix/image-style" -n -t int -s 5
