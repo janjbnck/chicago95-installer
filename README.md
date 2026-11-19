@@ -47,7 +47,7 @@ It also stops without changes in two more cases:
 | GTK3 override | Adds the override for your Xfce version to `~/.config/gtk-3.0/gtk.css` |
 | Flatpak | Adds a per-user override that exposes the theme |
 | Overlay scrollbars | Turns overlay scrolling off through Xfce's `Gtk/OverlayScrolling` setting |
-| Desktop shadows, background color | Turns off xfwm4 shadows and sets a solid `#008080` desktop on every monitor connected at login |
+| Desktop shadows, background | Turns off xfwm4 shadows and sets the `Setup.png` wallpaper from `Extras/Backgrounds/Wallpaper`, zoomed to fill every monitor connected at login |
 | Cursors | Selects `Chicago95_Standard_Cursors` |
 | Terminal theme | Applies the Chicago95 colors and the `Less Perfect DOS VGA 12` font without bold text |
 | Sound theme | Selects the Chicago95 sound theme and turns on event and input feedback sounds |
@@ -102,6 +102,7 @@ To remove the theme system-wide, delete these paths:
 - `/usr/share/sounds/Chicago95`
 - `/usr/share/fonts/chicago95`
 - `/etc/fonts/conf.d/70-chicago95-helvetica.conf`
+- `/usr/share/backgrounds/chicago95`
 - `/usr/share/xfce4/terminal/colorschemes/Chicago95.theme`
 - `images_chicago95.zip` and `chicago95.xcd` in LibreOffice's `share/config` and `share/registry` folders
 - `/usr/local/libexec/chicago95-first-login`

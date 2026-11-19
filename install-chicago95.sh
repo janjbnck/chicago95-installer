@@ -8,6 +8,7 @@ UI_FONT="Helvetica 8"
 TITLE_FONT="Helvetica Bold 8"
 TERMINAL_FONT="Less Perfect DOS VGA 12"
 FONTCONFIG_CONFIG=/etc/fonts/conf.d/70-chicago95-helvetica.conf
+WALLPAPER=/usr/share/backgrounds/chicago95/Setup.png
 FIRST_LOGIN_HELPER=/usr/local/libexec/chicago95-first-login
 FIRST_LOGIN_AUTOSTART=.config/autostart/chicago95-first-login.desktop
 START_ICON=/usr/share/icons/Chicago95-tux/places/16/start-here.png
@@ -105,6 +106,7 @@ system_targets() {
   say /usr/share/sounds/Chicago95
   say /usr/share/fonts/chicago95
   say "$FONTCONFIG_CONFIG"
+  say "${WALLPAPER%/*}"
   say /usr/share/xfce4/terminal/colorschemes/Chicago95.theme
   say "$libreoffice/share/config/images_chicago95.zip"
   say "$libreoffice/share/registry/chicago95.xcd"
@@ -292,16 +294,17 @@ configure_files() {
 }
 
 write_first_login_helper() {
-  cat >"$1" <<'EOF'
-#!/bin/sh
+  printf '#!/bin/sh\nwallpaper=%s\n' "$WALLPAPER" >"$1"
+  cat >>"$1" <<'EOF'
 export LC_ALL=C
 monitors=$(xrandr --query 2>/dev/null | awk '$2 == "connected" { print $1 }')
 [ -n "$monitors" ] || exit 1
 for monitor in $monitors; do
   prefix=/backdrop/screen0/monitor$monitor/workspace0
   xfconf-query -c xfce4-desktop -p "$prefix/color-style" -n -t int -s 0
-  xfconf-query -c xfce4-desktop -p "$prefix/image-style" -n -t int -s 0
   xfconf-query -c xfce4-desktop -p "$prefix/rgba1" -n -a -t double -s 0 -t double -s 0.501961 -t double -s 0.501961 -t double -s 1
+  xfconf-query -c xfce4-desktop -p "$prefix/image-style" -n -t int -s 5
+  xfconf-query -c xfce4-desktop -p "$prefix/last-image" -n -t string -s "$wallpaper"
 done
 rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/chicago95-first-login.desktop"
 EOF
@@ -380,7 +383,7 @@ stage_skel() {
 install_system() {
   $ROOT sh -euc '
     umask 022
-    src=$1 stage=$2 tmp=$3 helper=$4 greeter=$5 fontconfig=$6 libreoffice=$7
+    src=$1 stage=$2 tmp=$3 helper=$4 greeter=$5 fontconfig=$6 wallpaper=$7 libreoffice=$8
     install_dir() { rm -rf "$2/${1##*/}"; mkdir -p "$2"; cp -R "$1" "$2/"; chmod -R u=rwX,go=rX "$2/${1##*/}"; }
     install_file() { mkdir -p "${2%/*}"; cp "$1" "$2"; chmod 644 "$2"; }
     install_dir "$src/Theme/Chicago95" /usr/share/themes
@@ -391,6 +394,8 @@ install_system() {
       install_file "$font" "/usr/share/fonts/chicago95/${font##*/}"
     done
     install_file "$tmp/fontconfig.conf" "$fontconfig"
+    rm -rf "${wallpaper%/*}"
+    install_file "$src/Extras/Backgrounds/Wallpaper/${wallpaper##*/}" "$wallpaper"
     install_file "$src/Extras/Chicago95.theme" /usr/share/xfce4/terminal/colorschemes/Chicago95.theme
     install_file "$tmp/images_chicago95.zip" "$libreoffice/share/config/images_chicago95.zip"
     install_file "$tmp/chicago95.xcd" "$libreoffice/share/registry/chicago95.xcd"
@@ -400,7 +405,7 @@ install_system() {
     rm -rf /etc/skel/.local/share/themes/Chicago95
     cp -R "$stage/." /etc/skel/
     fc-cache -f
-  ' sh "$src" "$stage" "$tmp" "$FIRST_LOGIN_HELPER" "$GREETER_CONFIG" "$FONTCONFIG_CONFIG" "$libreoffice"
+  ' sh "$src" "$stage" "$tmp" "$FIRST_LOGIN_HELPER" "$GREETER_CONFIG" "$FONTCONFIG_CONFIG" "$WALLPAPER" "$libreoffice"
 }
 
 panel_running() { pgrep -u "$(id -u)" -x xfce4-panel >/dev/null 2>&1; }
