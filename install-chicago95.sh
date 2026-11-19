@@ -8,6 +8,9 @@ TERMINAL_FONT="Less Perfect DOS VGA 12"
 DESKTOP_COLOR="0 0.501961 0.501961 1"
 GTK4_HELPER=/usr/local/libexec/chicago95-gtk4-setup
 GTK4_AUTOSTART=.config/autostart/chicago95-gtk4-setup.desktop
+GREETER=/usr/share/xgreeters/lightdm-gtk-greeter.desktop
+GREETER_MAIN_CONFIG=/etc/lightdm/lightdm-gtk-greeter.conf
+GREETER_CONFIG=/etc/lightdm/lightdm-gtk-greeter.conf.d/99-chicago95.conf
 CHANNELS="xsettings xfwm4 xfce4-notifyd xfce4-desktop xfce4-panel xfce4-terminal"
 
 say() { printf '%s\n' "$*"; }
@@ -33,6 +36,8 @@ check_components() {
   need_command "Thunar" thunar
   need_command "Xfce Terminal" xfce4-terminal
   need_command "Flatpak" flatpak
+  [ -f "$GREETER" ] || missing="$missing  - LightDM GTK greeter (file $GREETER)
+"
   need_lib "GTK 4" libgtk-4.so.1
   need_lib "libcanberra GTK 3 module for event sounds" libcanberra-gtk3-module.so
   need_command "Fontconfig" fc-cache
@@ -62,6 +67,14 @@ check_session() {
   fi
 }
 
+check_greeter_config() {
+  overrides=$(grep -E '^[[:space:]]*(theme-name|icon-theme-name|cursor-theme-name|background)[[:space:]]*=' "$GREETER_MAIN_CONFIG" 2>/dev/null || true)
+  [ -z "$overrides" ] || {
+    printf '%s sets these keys. LightDM GTK greeter reads that file after every drop-in, so Chicago95 cannot override them without editing a file owned by the package. Comment them out and run the script again. Nothing was changed.\n%s\n' "$GREETER_MAIN_CONFIG" "$overrides" >&2
+    exit 1
+  }
+}
+
 owned_by_package() {
   { has dpkg-query && dpkg-query -S "$1" >/dev/null 2>&1; } ||
     { has rpm && rpm -qf "$1" >/dev/null 2>&1; } ||
@@ -78,6 +91,7 @@ system_targets() {
   say /usr/share/fonts/chicago95
   say /usr/share/xfce4/terminal/colorschemes/Chicago95.theme
   say "$GTK4_HELPER"
+  say "$GREETER_CONFIG"
 }
 
 skel_targets() {
@@ -272,6 +286,10 @@ rm -f "$config/autostart/chicago95-gtk4-setup.desktop"
 EOF
 }
 
+write_greeter_config() {
+  printf '[greeter]\ntheme-name=Chicago95\nicon-theme-name=Chicago95\ncursor-theme-name=%s\nbackground=#008080\n' "$CURSOR_THEME" >"$1"
+}
+
 stage_skel() {
   skel_targets | while read -r path; do
     if [ -f "$path" ]; then
@@ -302,22 +320,23 @@ stage_skel() {
 install_system() {
   $ROOT sh -euc '
     umask 022
-    src=$1 stage=$2 helper=$3 helper_target=$4
+    src=$1 stage=$2 helper=$3 helper_target=$4 greeter=$5 greeter_target=$6
     install_dir() { rm -rf "$2/${1##*/}"; mkdir -p "$2"; cp -R "$1" "$2/"; chmod -R u=rwX,go=rX "$2/${1##*/}"; }
     install_dir "$src/Theme/Chicago95" /usr/share/themes
     for dir in "$src"/Icons/* "$src"/Cursors/*; do install_dir "$dir" /usr/share/icons; done
     install_dir "$src/sounds/Chicago95" /usr/share/sounds
     rm -rf /usr/share/fonts/chicago95
-    mkdir -p /usr/share/fonts/chicago95 /usr/share/xfce4/terminal/colorschemes "${helper_target%/*}"
+    mkdir -p /usr/share/fonts/chicago95 /usr/share/xfce4/terminal/colorschemes "${helper_target%/*}" "${greeter_target%/*}"
     cp "$src"/Fonts/vga_font/*.ttf /usr/share/fonts/chicago95/
     cp "$src/Extras/Chicago95.theme" /usr/share/xfce4/terminal/colorschemes/
-    chmod 644 /usr/share/fonts/chicago95/* /usr/share/xfce4/terminal/colorschemes/Chicago95.theme
+    cp "$greeter" "$greeter_target"
+    chmod 644 /usr/share/fonts/chicago95/* /usr/share/xfce4/terminal/colorschemes/Chicago95.theme "$greeter_target"
     cp "$helper" "$helper_target"
     chmod 755 "$helper_target"
     rm -rf /etc/skel/.local/share/themes/Chicago95
     cp -R "$stage/." /etc/skel/
     fc-cache -f
-  ' sh "$src" "$stage" "$tmp/gtk4-helper" "$GTK4_HELPER"
+  ' sh "$src" "$stage" "$tmp/gtk4-helper" "$GTK4_HELPER" "$tmp/greeter.conf" "$GREETER_CONFIG"
 }
 
 panel_running() { pgrep -u "$(id -u)" -x xfce4-panel >/dev/null 2>&1; }
@@ -348,6 +367,7 @@ configure_current_user() {
 [ "$(id -u)" -ne 0 ] || die "Run this script as the user who should get the theme, not as root. It asks for root rights when it needs them."
 check_components
 check_session
+check_greeter_config
 if has sudo; then ROOT=sudo; else ROOT=doas; fi
 
 tmp=$(mktemp -d)
@@ -369,6 +389,7 @@ if terminal_uses_xfconf; then terminal_xfconf=true; fi
 monitors=$(connected_monitors)
 xfconf_script >"$tmp/xfconf.sh"
 write_gtk4_helper "$tmp/gtk4-helper"
+write_greeter_config "$tmp/greeter.conf"
 
 say "Preparing the defaults for new users..."
 stage_skel
