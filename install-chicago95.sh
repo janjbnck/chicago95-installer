@@ -338,23 +338,24 @@ stage_skel() {
 install_system() {
   $ROOT sh -euc '
     umask 022
-    src=$1 stage=$2 helper=$3 helper_target=$4 greeter=$5 greeter_target=$6
+    src=$1 stage=$2 tmp=$3 helper=$4 greeter=$5
     install_dir() { rm -rf "$2/${1##*/}"; mkdir -p "$2"; cp -R "$1" "$2/"; chmod -R u=rwX,go=rX "$2/${1##*/}"; }
+    install_file() { mkdir -p "${2%/*}"; cp "$1" "$2"; chmod 644 "$2"; }
     install_dir "$src/Theme/Chicago95" /usr/share/themes
     for dir in "$src"/Icons/* "$src"/Cursors/*; do install_dir "$dir" /usr/share/icons; done
     install_dir "$src/sounds/Chicago95" /usr/share/sounds
     rm -rf /usr/share/fonts/chicago95
-    mkdir -p /usr/share/fonts/chicago95 /usr/share/xfce4/terminal/colorschemes "${helper_target%/*}" "${greeter_target%/*}"
-    cp "$src"/Fonts/vga_font/*.ttf /usr/share/fonts/chicago95/
-    cp "$src/Extras/Chicago95.theme" /usr/share/xfce4/terminal/colorschemes/
-    cp "$greeter" "$greeter_target"
-    chmod 644 /usr/share/fonts/chicago95/* /usr/share/xfce4/terminal/colorschemes/Chicago95.theme "$greeter_target"
-    cp "$helper" "$helper_target"
-    chmod 755 "$helper_target"
+    for font in "$src"/Fonts/vga_font/*.ttf; do
+      install_file "$font" "/usr/share/fonts/chicago95/${font##*/}"
+    done
+    install_file "$src/Extras/Chicago95.theme" /usr/share/xfce4/terminal/colorschemes/Chicago95.theme
+    install_file "$tmp/greeter.conf" "$greeter"
+    install_file "$tmp/first-login" "$helper"
+    chmod 755 "$helper"
     rm -rf /etc/skel/.local/share/themes/Chicago95
     cp -R "$stage/." /etc/skel/
     fc-cache -f
-  ' sh "$src" "$stage" "$tmp/first-login" "$FIRST_LOGIN_HELPER" "$tmp/greeter.conf" "$GREETER_CONFIG"
+  ' sh "$src" "$stage" "$tmp" "$FIRST_LOGIN_HELPER" "$GREETER_CONFIG"
 }
 
 panel_running() { pgrep -u "$(id -u)" -x xfce4-panel >/dev/null 2>&1; }
