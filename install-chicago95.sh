@@ -8,6 +8,7 @@ TERMINAL_FONT="Less Perfect DOS VGA 12"
 DESKTOP_COLOR="0 0.501961 0.501961 1"
 GTK4_HELPER=/usr/local/libexec/chicago95-gtk4-setup
 GTK4_AUTOSTART=.config/autostart/chicago95-gtk4-setup.desktop
+START_ICON=/usr/share/icons/Chicago95-tux/places/16/start-here.png
 GREETER=/usr/share/xgreeters/lightdm-gtk-greeter.desktop
 GREETER_MAIN_CONFIG=/etc/lightdm/lightdm-gtk-greeter.conf
 GREETER_CONFIG=/etc/lightdm/lightdm-gtk-greeter.conf.d/99-chicago95.conf
@@ -166,6 +167,10 @@ xfce4-panel /panels/panel-1/background-style uint 0
 xfce4-panel /panels/panel-1/icon-size uint 16
 xfce4-panel /panels/panel-1/plugin-ids int[] 1 2 3 4 5 6 7 8 9
 xfce4-panel /plugins/plugin-1 string whiskermenu
+xfce4-panel /plugins/plugin-1/button-icon string $START_ICON
+xfce4-panel /plugins/plugin-1/button-title string Start
+xfce4-panel /plugins/plugin-1/show-button-icon bool true
+xfce4-panel /plugins/plugin-1/show-button-title bool true
 xfce4-panel /plugins/plugin-2 string separator
 xfce4-panel /plugins/plugin-2/style uint 2
 xfce4-panel /plugins/plugin-3 string showdesktop

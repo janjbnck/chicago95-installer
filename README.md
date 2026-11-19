@@ -36,7 +36,9 @@ It also stops without changes in two more cases:
 | LightDM font, Terminal fonts | Installs the DOS VGA fonts to `/usr/share/fonts/chicago95` and refreshes the font cache |
 | Enabling the GTK, icon, window manager and notification themes | Sets the theme, icons, `Sans Bold 8` title font and 100% notification opacity |
 | GNOME, GTK4 and libadwaita | Adds the `@import` block to `~/.config/gtk-4.0/gtk.css` |
-| XFCE4 panelbar (horizontal) | Builds the taskbar from the manual steps: Whisker Menu, Show Desktop, window buttons, notification area and clock || GTK3 override | Adds the override for your Xfce version to `~/.config/gtk-3.0/gtk.css` |
+| XFCE4 panelbar (horizontal) | Builds the taskbar from the manual steps: Whisker Menu, Show Desktop, window buttons, notification area and clock |
+| Start Buttons | Gives the Whisker Menu button the Tux icon from the `Chicago95-tux` icon theme and a "Start" label |
+| GTK3 override | Adds the override for your Xfce version to `~/.config/gtk-3.0/gtk.css` |
 | Flatpak | Adds a per-user override that exposes the theme and GTK4 stylesheet and sets `GTK_THEME` |
 | Overlay scrollbars | Turns overlay scrolling off through Xfce's `Gtk/OverlayScrolling` setting |
 | Desktop shadows, background color | Turns off xfwm4 shadows and sets a solid `#008080` desktop on every connected monitor |
@@ -49,7 +51,7 @@ New accounts get the same settings through `/etc/skel`. The GTK4 import line nee
 
 ## What gets skipped
 
-- **Microsoft branding:** Start button icon, Thunar status badge, DOS prompt and startup message for Bash and zsh, MS-DOS terminal title and cursor, Whisker Menu sidebar image and the Windows 95 startup sound. The Chicago95 icon theme itself still draws a Windows flag on the Whisker Menu button, because that icon is part of the theme rather than an optional tweak.
+- **Microsoft branding:** Windows start button badges, Thunar status badge, DOS prompt and startup message for Bash and zsh, MS-DOS terminal title and cursor, Whisker Menu sidebar image and the Windows 95 startup sound
 - **Known problems in INSTALL.md:**
   - Qt5 and qt5ct: missing scrollbar borders with no fix
   - Helvetica and MS Sans Serif fonts: name conflict with Adobe Helvetica, and the Microsoft font isn't included
